@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIMECULTIVA | Logistics Topology</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Inter', sans-serif; color: white; }
+        #overlay { position: absolute; top: 30px; left: 30px; z-index: 10; pointer-events: none; }
+        h1 { font-size: 28px; font-weight: 800; margin: 0 0 5px 0; letter-spacing: 2px; }
+        p { color: #888; font-size: 14px; font-weight: 300; margin: 0 0 15px 0; }
+        .status-pill { display: inline-block; padding: 4px 10px; border: 1px solid #33cc66; color: #33cc66; border-radius: 20px; font-size: 10px; font-weight: 600; letter-spacing: 1px; }
+        .data-readout { margin-top: 30px; }
+        .data-point { margin-bottom: 10px; font-size: 12px; color: #aaa; }
+        .data-value { font-weight: 600; color: #fff; float: right; margin-left: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <h1>DIMECULTIVA</h1>
+        <p>Live Enterprise Supply Chain Topology</p>
+        <div class="status-pill">SYSTEM OPTIMAL</div>
+        
+        <div class="data-readout">
+            <div class="data-point">Active Fleet Nodes <span class="data-value">1,204</span></div>
+            <div class="data-point">Global Packet Loss <span class="data-value">0.01%</span></div>
+            <div class="data-point">Waterfall Hub Capacity <span class="data-value">94%</span></div>
+            <div class="data-point">Krugersdorp Depot <span class="data-value">Stable</span></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // 1. Scene Setup
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.015);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.8;
+        controls.enablePan = false;
+        controls.minDistance = 15;
+        controls.maxDistance = 40;
+
+        // 3. The Digital Globe
+        const globeGeometry = new THREE.SphereGeometry(10, 64, 64);
+        const globeMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x111111, 
+            wireframe: true, 
+            transparent: true, 
+            opacity: 0.15 
+        });
+        const globe = new THREE.Mesh(globeGeometry, globeMaterial);
+        scene.add(globe);
+
+        // Core Hubs Coordinates (Lat, Lon)
+        const hubs = [
+            { lat: -26.0, lon: 28.1, name: "Waterfall Hub" },
+            { lat: -26.1, lon: 27.7, name: "Krugersdorp Depot" },
+            { lat: -33.9, lon: 18.4, name: "Cape Town Port" },
+            { lat: 51.5, lon: -0.1, name: "London Node" },
+            { lat: 40.7, lon: -74.0, name: "NY Exchange" },
+            { lat: 1.3, lon: 103.8, name: "Singapore Logistics" }
+        ];
+
+        // Math helper to convert Lat/Lon to 3D Space
+        function getVectorFromLatLon(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            const x = -(radius * Math.sin(phi) * Math.cos(theta));
+            const z = (radius * Math.sin(phi) * Math.sin(theta));
+            const y = (radius * Math.cos(phi));
+            return new THREE.Vector3(x, y, z);
+        }
+
+        // Plot Hubs
+        const hubGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+        const hubMaterial = new THREE.MeshBasicMaterial({ color: 0x33cc66 });
+        
+        hubs.forEach(hub => {
+            const position = getVectorFromLatLon(hub.lat, hub.lon, 10);
+            const mesh = new THREE.Mesh(hubGeometry, hubMaterial);
+            mesh.position.copy(position);
+            scene.add(mesh);
+        });
+
+        // 4. Generate Supply Chain Routes (Curved Lines)
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x1f6feb, transparent: true, opacity: 0.4 });
+        
+        // Connect random hubs with arcs
+        for(let i = 0; i < 40; i++) {
+            // Pick two random points on the globe
+            const startLat = Math.random() * 180 - 90;
+            const startLon = Math.random() * 360 - 180;
+            const endLat = Math.random() * 180 - 90;
+            const endLon = Math.random() * 360 - 180;
+
+            const p1 = getVectorFromLatLon(startLat, startLon, 10);
+            const p2 = getVectorFromLatLon(endLat, endLon, 10);
+            
+            // Create an arc by pulling the middle of the line outward
+            const distance = p1.distanceTo(p2);
+            const controlPoint = p1.clone().add(p2).multiplyScalar(0.5).normalize().multiplyScalar(10 + (distance * 0.2));
+            
+            const curve = new THREE.QuadraticBezierCurve3(p1, controlPoint, p2);
+            const points = curve.getPoints(50);
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            
+            const line = new THREE.Line(geometry, lineMaterial);
+            scene.add(line);
+        }
+
+        camera.position.z = 25;
+
+        // 5. Render Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle Resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
